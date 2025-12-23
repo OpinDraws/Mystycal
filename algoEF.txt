@@ -1,0 +1,200 @@
+% ==========================================
+% ГЛАВА 1: ПРИЗЫВ ПЕРВОЭЛЕМЕНТОВ
+% ==========================================
+
+% --- Элемент Огня (Ignis) ---
+<<
+    101 (Ignis Base) /mystical_comment_flag pop pop
+    true (Spark) /mystical_comment_flag pop pop
+    
+    % Усиливаем огонь
+    [
+        3 copy 
+        add 
+        (Flare) /mystical_comment_flag pop pop
+    ]
+    
+    (Fire Essence) /mystical_comment_flag pop pop
+>>
+
+% --- Элемент Воды (Aqua) ---
+<<
+    202 (Aqua Base) /mystical_comment_flag pop pop
+    false (Flow) /mystical_comment_flag pop pop
+    
+    % Создаем водоворот
+    <<
+        exch
+        (Whirlpool) /mystical_comment_flag pop pop
+    >>
+    
+    (Water Essence) /mystical_comment_flag pop pop
+>>
+
+% --- Элемент Эфира (Aether) ---
+12345 (Aether Seed) /mystical_comment_flag pop pop
+
+% ==========================================
+% ГЛАВА 2: ПЕРВАЯ ТРАНСМУТАЦИЯ
+% ==========================================
+
+% --- Шаг 1: Сжатие ---
+[
+    % Берем Эфир и Огонь
+    3 index 
+    (Summon Aether) /mystical_comment_flag pop pop
+    
+    mul % Смешиваем
+    (Compression) /mystical_comment_flag pop pop
+    
+    % Добавляем магическую константу
+    <<
+        777 (Lucky Number) /mystical_comment_flag pop pop
+        add
+        (Divine Intervention) /mystical_comment_flag pop pop
+    >>
+]
+
+% --- Шаг 2: Отражение ---
+<<
+    % Дублируем результат
+    dup
+    (Reflection) /mystical_comment_flag pop pop
+    
+    % Инверсия
+    -1 xor
+    (Shadow Realm) /mystical_comment_flag pop pop
+    
+    % Помещаем в массив
+    [
+        exch
+        sub
+        (Energy Release) /mystical_comment_flag pop pop
+    ]
+>>
+
+% ==========================================
+% ГЛАВА 3: ВЕЛИКИЙ ЦИКЛ
+% ==========================================
+
+% --- Виток Спирали 1 ---
+<<
+    (Cycle I) /mystical_comment_flag pop pop
+    
+    dup
+    31337 (Prime Constant) /mystical_comment_flag pop pop
+    mul
+    
+    <<
+        (Inner Sanctum I) /mystical_comment_flag pop pop
+        13 (Bakers Dozen) /mystical_comment_flag pop pop
+        add
+    >>
+    
+    100000 mod
+    (Purification I) /mystical_comment_flag pop pop
+>>
+
+% --- Виток Спирали 2 ---
+[
+    (Cycle II) /mystical_comment_flag pop pop
+    
+    count 2 sub roll 
+    (Summon Water) /mystical_comment_flag pop pop
+    add
+    (Steam Generation) /mystical_comment_flag pop pop
+    
+    <<
+        dup
+        true (Truth) /mystical_comment_flag pop pop
+        or
+        (Logic Gate) /mystical_comment_flag pop pop
+        
+        [
+            false (Lies) /mystical_comment_flag pop pop
+            xor
+        ]
+    >>
+]
+
+% --- Виток Спирали 3 ---
+<<
+    (Cycle III) /mystical_comment_flag pop pop
+    
+    5 mul
+    3 div
+    (Alchemy Math) /mystical_comment_flag pop pop
+    
+    <<
+        (Satellite Node) /mystical_comment_flag pop pop
+        999
+    >>
+    pop 
+    
+    (Stability Check) /mystical_comment_flag pop pop
+>>
+
+% ==========================================
+% ГЛАВА 4: ХАОТИЧЕСКИЙ РЕЗОНАНС (Исправлено)
+% Мы вручную повторяем структуру 3 раза,
+% чтобы не использовать сложный цикл 'for'
+% ==========================================
+
+% -- Резонанс 1 --
+<<
+    dup
+    (Resonance Alpha) /mystical_comment_flag pop pop
+    2 mul
+    [ 3 div (Harmonics) /mystical_comment_flag pop pop ]
+    pop
+>>
+(Echo I) /mystical_comment_flag pop pop
+
+% -- Резонанс 2 --
+<<
+    dup
+    (Resonance Beta) /mystical_comment_flag pop pop
+    2 mul
+    [ 3 div (Harmonics) /mystical_comment_flag pop pop ]
+    pop
+>>
+(Echo II) /mystical_comment_flag pop pop
+
+% -- Резонанс 3 --
+<<
+    dup
+    (Resonance Gamma) /mystical_comment_flag pop pop
+    2 mul
+    [ 3 div (Harmonics) /mystical_comment_flag pop pop ]
+    pop
+>>
+(Echo III) /mystical_comment_flag pop pop
+
+
+% ==========================================
+% ГЛАВА 5: ЗАПЕЧАТЫВАНИЕ
+% ==========================================
+
+<<
+    (Final Material) /mystical_comment_flag pop pop
+    
+    add add
+    (Fusion of Elements) /mystical_comment_flag pop pop
+    
+    [
+        (Outer Shell) /mystical_comment_flag pop pop
+        
+        true
+        (Seal Active) /mystical_comment_flag pop pop
+        and
+        
+        <<
+            0 (Void) /mystical_comment_flag pop pop
+        >>
+        pop
+    ]
+    
+    (The Stone Created) /mystical_comment_flag pop pop
+>>
+
+(SPELL COMPLETE) /mystical_comment_flag pop pop

@@ -1,0 +1,1685 @@
+%!
+
+/arg { exch def } def
+
+/sfd_debug { pop } def
+% /sfd_debug { == } def
+% define if not known
+/defaultdef {
+    % name definition
+    exch
+    % definition name
+    dup where {
+        % definition name dict
+        pop pop pop
+    } {
+        % definition name
+        exch def
+    } ifelse
+} def
+
+% += for postscript, two ways
+
+% add to a variable
+% v i -> v i v -> v i x -> v i+x -> -
+/adddef { 1 index cvx exec add def } def
+
+% add to a key in a dict or a position in an array
+% c k i -> c k i c -> c k i c k -> c k i x -> c k i+x -> -
+/addput { 2 index 2 index get add put } def
+
+/debug_var {
+    [ exch dup cvx exec ] ==
+} def
+
+/safe_func_dict_dict 20 dict defaultdef
+
+% /foo [/x /y /z] { x dup mul y dup mul z dup mul add add } 1 /new dict_safe_func
+% DSFs dictionary situation:
+%     Each function (by name) has its own func_local_dict
+%         (stored in /safe_func_dict_dict)
+%     The "function_dictionary" arg can be:
+%         a dictionary to use 
+%         /new to use a new dictionary for a new dictionary for each invocation
+%         false to not wrap the function in a dictionary at all
+%     This function_dictionary runs _inside_ of the func_local_dict.
+
+/dict_safe_func {
+    /function_dictionary arg
+    /returns arg
+    /function_body exch cvlit def
+    /arguments arg
+    /function_name arg
+
+    /func_local_dict <<
+        /arguments arguments 
+        /local_function_body function_body 
+        /function_dictionary function_dictionary 
+        /function_name function_name 
+        /returns returns 
+    >> def
+    safe_func_dict_dict function_name func_local_dict put
+
+    /standard_function_body {
+        % get data out of fake closure dictionary
+        safe_func_dict_dict exch get /func_local_dict arg
+        % start actual local dictionary, copy func_local_dict into it
+        10 dict begin
+        func_local_dict {
+            def
+        } forall
+        /func_local_dict currentdict def
+
+        % set a sentinel, roll above args
+        /function_name_s function_name 20 string cvs def
+        /f_name_len function_name_s length def
+        /sentinel 9 f_name_len add 10 add string def
+        sentinel 0 (sentinel:) putinterval
+        sentinel 9 function_name_s putinterval
+        0 1 9 {
+            9 add f_name_len add sentinel exch 32 put
+        } for
+        sentinel 9 f_name_len add 10 getinterval rand exch cvs pop
+        /sentinel sentinel cvn def
+        sentinel arguments length 1 add 1 roll
+        [countdictstack (>>> start) sentinel] sfd_debug
+        % enter dictionary
+        function_dictionary /new eq {
+            /function_dictionary 10 dict def
+        } if
+        function_dictionary false ne {
+            function_dictionary begin
+        } if
+        % define args
+        arguments length 1 sub -1 0 {
+            arguments exch get arg
+        } for
+        % run body
+        func_local_dict /local_function_body get cvx exec
+        % roll for returns
+        returns 1 add -1 roll
+        function_dictionary false ne {
+            % check dictionary
+            currentdict function_dictionary ne {
+                countdictstack ==
+                (wrong dictionary!) ==
+                die
+            } if
+            % leave dictionary
+            end
+        } if
+        % check sentinel
+        dup sentinel eq {
+            [countdictstack (<<< complete) sentinel] sfd_debug
+            pop
+        } {
+            1 0 0 setrgbcolor
+            doot
+            pstack
+            [countdictstack sentinel (not in place for) function_name] ==
+            die
+        } ifelse
+        currentdict func_local_dict ne {
+            countdictstack ==
+            (where is closure dictionary?!) ==
+            die
+        } if
+        end %func_local_dict
+        currentdict /func_local_dict undef
+    } def
+    func_local_dict /new_function_body [
+        function_name /standard_function_body cvx
+    ] put
+    func_local_dict /new_function_body get cvx function_name arg
+} def
+
+/safefunc { /new dict_safe_func } def
+/simplefunc { 0 /new dict_safe_func } def
+
+/circle { 0 360 arc closepath } def
+
+/dot { currentlinewidth 1.5 mul circle fill } def
+/doot { 0 0 dot } def
+
+/recip { 1 exch div } def
+/maximum { 2 copy gt { pop } { exch pop } ifelse } def
+/minimum { 2 copy lt { pop } { exch pop } ifelse } def
+/half { 2 div } def
+
+/PI 3.1415926 def
+
+/gcd_dict 3 dict def
+/gcd {
+    gcd_dict begin
+        /b arg /a arg
+        {
+            b a gt {
+                /b a /a b def def
+            } {
+                /r a b mod def
+                r 0 eq {
+                    exit
+                } {
+                    /a b /b r def def
+                } ifelse
+            } ifelse
+        } loop
+        b
+    end
+}  def
+
+% mod that accepts floats and makes negatives positive
+/mod_dict 2 dict def
+/mymod {
+    mod_dict begin
+        /modulus exch def
+        /original exch def
+        original 0 lt original modulus ge or {
+            original modulus div floor neg
+            modulus mul original add
+            /original exch def
+        } if
+        original
+    end
+} def
+
+/interpolate { 4 dict begin /range arg /point arg
+    point 0 ge {
+        point range length 1 sub lt {
+            /p point cvi def
+            /adjust point p sub def
+            % return range[p] + adjust * (range[p+1] - range[p])
+            range p get dup range p 1 add get exch sub adjust mul add
+        } {
+            range range length 1 sub get
+        } ifelse
+    }{
+        range 0 get
+    } ifelse
+    end
+} def
+
+/randint [/range] {rand range cvi mod} 1 safefunc
+
+/randrange [/min /max /resolution] {
+    max min sub resolution mul randint resolution div min add
+} 1 safefunc
+
+% curve analysis
+/lcurveto_dict 8 dict def
+/lcurveto {
+    lcurveto_dict begin
+        /y3 arg /x3 arg
+        /y2 arg /x2 arg
+        /y1 arg /x1 arg
+        x1 y1 lineto x2 y2 lineto x3 y3 lineto
+    end
+} def
+/pcurveto {
+    lcurveto_dict begin
+        /y3 arg /x3 arg
+        /y2 arg /x2 arg
+        /y1 arg /x1 arg
+        currentpoint /y0 arg /x0 arg
+        gsave
+            1 0 0 setrgbcolor
+            newpath
+            x0 y0 dot
+            x1 y1 dot
+            x2 y2 dot
+            x3 y3 dot
+        grestore
+        x1 y1 x2 y2 x3 y3 curveto
+    end
+} def
+
+% r is radius of near circle (centered on origin)
+% q is radius of far circle (centered on d,0)
+% d is distance between centers
+% returns angle of intersection from origin
+/circle_intersection { 5 dict begin /d arg /q arg /r arg
+    r dup mul d dup mul add q dup mul sub d 2 mul div
+    /x exch def
+    x r div dup dup mul 1 exch sub sqrt exch atan
+    /a exch def
+    a
+end } def
+
+/distance {
+    /by arg /bx arg /ay arg /ax arg
+    ax bx sub dup mul ay by sub dup mul add sqrt
+} def
+
+/angle4 {
+    /by arg /bx arg /ay arg /ax arg
+    by ay sub bx ax sub atan
+} def
+
+% ellipse library
+/ellipsedict 20 dict def
+ellipsedict /mtrx matrix put
+ellipsedict begin
+    /ell_base {
+        /arc_command arg
+        /endangle arg /startangle arg
+        /yrad arg /xrad arg
+        /y arg /x arg
+        /savematrix mtrx currentmatrix def
+        x y translate
+        xrad yrad scale
+        0 0 1 startangle endangle arc_command cvx exec
+        savematrix setmatrix
+    } def
+end
+/ell { ellipsedict begin /arc ell_base end } def
+/elln { ellipsedict begin /arcn ell_base end } def
+/spell { ellipsedict begin /sparc ell_base end } def
+/spelln { ellipsedict begin /sparcn ell_base end } def
+
+% svg-style arc
+% svgarc: draw elliptical arc with SVG-style arguments
+% xrad yrad xrot large sweep nx ny
+% start point at currentpoint, end point at nx,ny
+% radii of ellipse is xrad, yrad
+% angle of ellipse x-axis is xrot
+% arc counterclockwise if sweep is 1, else clockwise
+% large arc if large is 1
+
+% rsvgarc: nx/ny is relative
+% svgsparc: use spline arcs, two if large
+% rsvgsparc: both of above
+% dsvgarc: debug, show origin
+
+ellipsedict begin
+    /svgarc_base 
+    [/xrad /yrad /xrot /large /sweep /nx /ny /relative /spline /debug] {
+
+        % save current ref frame
+        /originalmatrix matrix currentmatrix def
+
+        % spare matrix for transformations
+        /tempmatrix matrix def
+
+        /ntrans {
+            % copy of tempmatrix is already on stack
+            pop
+            % nx and ny need to be where they'll be in the new situation
+            nx ny tempmatrix itransform /ny arg /nx arg
+            tempmatrix concat
+        } def
+
+        %move to origin
+        relative {
+            currentpoint translate
+        } {
+            currentpoint tempmatrix translate
+            ntrans
+        } ifelse
+
+        %rotate ellipse
+        xrot tempmatrix rotate
+        ntrans
+
+        % scale ellipse to circle
+        xrad yrad tempmatrix scale
+        /r 1 def
+        ntrans
+
+        % rotate nx/ny to 0/positive
+        nx neg ny atan tempmatrix rotate
+        ntrans
+
+        % at this point, origin is at currentpoint, nx is 0, ny > 0, r=1
+
+        % if ny > 2, change r to half of ny (based on W3 SVG spec F.6.2)
+        ny 2 gt {
+            /r ny 2 div def
+        } if
+
+        % compute and draw the arc
+        /l ny 2 div def
+        /s r dup mul l dup mul sub sqrt def 
+        /a l s atan def 
+        sweep 0 gt large 0 gt xor {
+            -1 1 scale
+        } if
+        large 0 gt {
+            spline {
+                s neg l r a neg 180 sparcn
+                s neg l r 180 a sparcn
+            } {
+                s neg l r a neg a arcn
+            } ifelse
+        } { 
+            spline {
+                s neg l r a neg a sparc
+            } {
+                s neg l r a neg a arc
+            } ifelse
+        } ifelse
+        debug { gsave currentpoint newpath goto s neg l goto stroke grestore } if
+
+        % return to original ref frame
+        originalmatrix setmatrix
+    } 0 ellipsedict dict_safe_func
+end
+
+/svgarc {ellipsedict begin false false false svgarc_base end} def
+/rsvgarc {ellipsedict begin true false false svgarc_base end} def
+/svgsparc {ellipsedict begin false true false svgarc_base end} def
+/rsvgsparc {ellipsedict begin true true false svgarc_base end} def
+/dsvgarc {ellipsedict begin false false true svgarc_base end} def
+
+
+/softscale {
+    dup dup scale
+    1 exch div thicken
+} def
+
+/thicken {
+    currentlinewidth mul setlinewidth
+} def
+
+/box {
+    % lbrt
+    4 copy 3 -1 roll exch 3 1 roll 6 2 roll
+    % lb rb rt lt
+    moveto lineto lineto lineto closepath
+} def
+
+/square {       % like circle but square
+    3 dict begin
+        /r arg
+        /y arg
+        /x arg
+        x r sub y r sub x r add y r add box
+    end
+} def
+
+/roundboxdict 5 dict def
+%box with rounded corners
+/roundbox {
+    %lbrt corner_radius
+    roundboxdict begin
+        /c arg
+        /t exch c sub def 
+        /r exch c sub def
+        /b exch c add def
+        /l exch c add def
+        r t c 0 90 arc
+        l t c 90 180 arc
+        l b c 180 270 arc
+        r b c 270 360 arc
+        closepath
+    end
+} def
+
+/curr_path {
+    false
+    gsave
+        {2 {pop} repeat pop true}
+        {2 {pop} repeat pop true}
+        {6 {pop} repeat pop true}
+        {0 {pop} repeat pop true}
+        pathforall
+    grestore
+} def
+
+/goto {
+    curr_path {lineto} {moveto} ifelse
+} def
+/rgoto { rlineto } def
+
+/centershowdict 4 dict def
+/centershow {
+    centershowdict begin
+        gsave
+            0 0 moveto
+            dup true charpath pathbbox
+            /top exch def
+            /right exch def
+            /bottom exch def
+            /left exch def
+        grestore
+        gsave
+            left right add 2 div neg
+            top bottom add 2 div neg
+            moveto show
+        grestore
+    end
+} def
+
+% use anonymous dictionary in case function contains circrepeat
+/schlafrepeat {
+    3 dict begin
+    /cr_function arg
+    /cr_x arg
+    /cr_n arg
+    cr_n abs {
+        cr_function
+        360 cr_n div cr_x mul rotate
+    } repeat
+    end
+} def
+/circrepeat { 1 exch schlafrepeat } def
+
+% takes a proc, runs it on both sides
+/hmirror {
+    2 dict begin
+        /lr_function arg
+        -1 2 1 {
+            gsave
+                1 scale
+                lr_function
+            grestore
+        } for
+    end
+} def
+
+/vmirror {
+    2 dict begin
+        /tb_function arg
+        -1 2 1 {
+            gsave
+                1 exch scale
+                tb_function
+            grestore
+        } for
+    end
+} def
+
+/grayfill { gsave setgray fill grestore } def
+/rgbfill { gsave setrgbcolor fill grestore } def
+/hsbfill { gsave sethsbcolor fill grestore } def
+/whitefill { 1 grayfill } def
+
+% "sinebow" based on http://basecase.org/env/on-rainbows by Charlie Loyd
+/sinebow {
+    2 div
+    dup cos dup mul exch
+    dup 120 add cos dup mul exch
+    120 sub cos dup mul
+} def
+
+/setsinebowcolor { sinebow setrgbcolor } def
+/sinebowfill { gsave setsinebowcolor fill grestore } def
+
+% "katebow" colors based on "The 12-bit rainbow palette" by Kate Rose Morley
+% https://iamkate.com/data/12-bit-rainbow/
+
+/katebow_dict 10 dict def
+katebow_dict begin
+    /katebow_colors [
+        [10 12 14 14  9  4  2  0  0  3 6 8 10]
+        [ 3  6  9 13 13 13 12 11  9  6 3 1  3]
+        [ 5  6  4  0  5  8 11 12 12 11 9 7  5]
+    ] def
+end
+
+/katebow { /angle arg
+    katebow_dict begin
+        /k_index angle 360 mymod 30 div def
+        0 1 2 {
+            katebow_colors exch get k_index exch interpolate 15 div
+        } for
+    end
+} def
+/setkatebowcolor { katebow setrgbcolor } def
+/katebowfill { katebow rgbfill } def
+
+% take (#db0072) or (db0072), put r g b on the stack
+% so you can say `(#db0072) hextorgb setrgbcolor` or similar
+/hextorgb { /hexcolor arg
+    hexcolor 0 get (#) 0 get eq {
+        /hexcolor hexcolor 1 hexcolor length 1 sub getinterval def
+    } if
+    /colorlen hexcolor length 3 idiv def
+    /result [0 0 0] def
+    /buffer colorlen 3 add string def
+    buffer 0 (16#) putinterval
+    0 1 2 { /i arg
+        hexcolor i colorlen mul colorlen getinterval
+        buffer exch 3 exch putinterval
+        result i buffer cvi put
+    } for
+    /divisor 16 colorlen exp 1 sub def
+    0 1 2 { /i arg
+        result i get divisor div
+    } for
+} def
+
+/sethexcolor { hextorgb setrgbcolor } def
+/hexfill { hextorgb rgbfill } def
+
+% render an eps file, given filename and bounding box, 
+% with ll at 0,0 and height of 1
+/epsdict 10 dict def
+/include_eps {
+    epsdict begin
+        /t arg
+        /r arg
+        /b arg
+        /l arg
+        /file arg
+        % code from eps spec
+        /b4_Inc_state save def          % Save state for cleanup
+        /dict_count countdictstack def  % Count objects on dict stack
+        /op_count count 1 sub def       % Count objects on operand stack
+        userdict begin                  % Push userdict on dict stack
+        /showpage { } def               % Redefine showpage, { } = null proc
+        0 setgray 0 setlinecap          % Prepare graphics state
+        1 setlinewidth 0 setlinejoin
+        10 setmiterlimit [ ] 0 setdash newpath
+        /languagelevel where            % If level not equal to 1 then
+        {
+            pop languagelevel           % set strokeadjust and
+            1 ne                        % overprint to their defaults.
+            {
+                false setstrokeadjust false setoverprint
+            } if
+        } if
+
+        1 t b sub div dup scale
+        l neg b neg translate
+
+        l b r t box clip newpath
+
+        file run
+
+        count op_count sub {pop} repeat
+        countdictstack dict_count sub {end} repeat
+        b4_Inc_state restore
+    end
+} def
+
+/shavedict 10 dict def
+/shavepath {
+    shavedict begin
+    % important vars: oldx oldy startx starty
+        [
+            {
+                /y arg /x arg
+                /startx x def /starty y def
+                /oldx x def /oldy y def
+                x y 
+                /moveto cvx
+            }
+            {
+                /y arg /x arg
+                oldx x sub dup mul oldy y sub dup mul add sqrt
+                currentlinewidth 0.1 mul gt {
+                    % line is not too short to ignore
+                    /oldx x def /oldy y def
+                    x y
+                    /lineto cvx
+                } if
+            }
+            {
+                /y3 arg /x3 arg
+                /y2 arg /x2 arg
+                /y1 arg /x1 arg
+                oldx x1 sub dup mul oldy y1 sub dup mul add sqrt
+                x1 x2 sub dup mul y1 y2 sub dup mul add sqrt
+                x2 x3 sub dup mul y2 y3 sub dup mul add sqrt
+                add add
+                currentlinewidth 0.1 mul gt {
+                    % curve is not too short to ignore
+                    /oldx x3 def /oldy y3 def
+                    x1 y1 x2 y2 x3 y3
+                    /curveto cvx
+                } if
+            }
+            {
+                oldx startx sub dup mul oldy starty sub dup mul add sqrt
+                currentlinewidth 0.1 mul le {
+                    % closepath is too short - might cause trouble
+                    % change end of last segment to exactly start point
+                    % top of stack is either x y curveto or x y lineto
+                    3 1 roll
+                    pop pop startx starty 
+                    3 -1 roll
+                } if
+                /oldx startx def /oldy starty def
+                /closepath cvx
+            }
+            pathforall
+        ] 
+        newpath
+        cvx exec
+    end
+} def
+
+% colors
+% divide distance from white/black by x
+
+/lighten {
+    currentrgbcolor
+    3 {
+        4 -1 roll
+        dup
+        5 1 roll
+        exch 1 exch sub exch div 1 exch sub
+        3 1 roll
+    } repeat
+    setrgbcolor
+    pop
+} def
+/darken {
+    currentrgbcolor
+    3 {
+        4 -1 roll
+        dup
+        5 1 roll
+        div
+        3 1 roll
+    } repeat
+    setrgbcolor
+    pop
+} def
+
+
+% multiply distance from white/black by x
+/mul_lighten {
+    currentrgbcolor
+    3 {
+        4 -1 roll
+        dup
+        5 1 roll
+        exch 1 exch sub exch mul 1 exch sub
+        3 1 roll
+    } repeat
+    setrgbcolor
+    pop
+} def
+/mul_darken {
+    currentrgbcolor
+    3 {
+        4 -1 roll
+        dup
+        5 1 roll
+        mul
+        3 1 roll
+    } repeat
+    setrgbcolor
+    pop
+} def
+
+% grid of dots in box given 
+/dotgrid {
+    /gridspacing arg
+    /gridtop arg
+    /gridright arg
+    /gridbottom arg
+    /gridleft arg
+    gridleft gridspacing gridright {
+        /gridx arg
+        gridbottom gridspacing gridtop {
+            /gridy arg
+            gridx gridy dot
+        } for
+    } for
+} def
+%!
+
+% arg and dict_safe_func are more generally needed
+
+
+/mystical_dict 30 dict def
+mystical_dict begin
+
+% load other dmmlib functions inside mystical_dict 
+% to avoid polluting user namespace
+
+
+/ring_debug false def
+/type_debug false def
+% ring_spacing is distance from parent ring radius to child ring full_radius
+% ring_spacing needs to be at least 1
+/ring_spacing 2 def
+/ring_width 1 def
+/std_sigil_width 1.25 def
+% sibling_spacing is distance between rings with same parent
+/sibling_spacing 0.5 def
+/sibling_hs sibling_spacing half def
+/ring_halfwidth ring_width half def
+/buffer 100 string def
+/Zapf-Chancery 0.5 selectfont
+/nonsigil_spacing 0.125 def
+/cartouche_radius 0.25 def
+/comment_shrink_factor 2 def
+/kerning true def
+/compact_wrapper true def
+/nib_angle -60 def
+
+/nib_matrix matrix currentmatrix def
+/set_nib_matrix {
+    /nib_matrix matrix currentmatrix def
+} def
+/nstroke {
+    gsave
+        nib_matrix setmatrix
+        24 recip setlinewidth
+        nib_angle rotate
+        0.5 1 scale
+        0.5 callistroke
+    grestore
+    newpath
+} def
+/ndot {
+    gsave
+        translate
+        % nib_matrix setmatrix
+        nib_angle rotate
+        0.75 1 scale
+        0 0 16 recip spcircle fill
+    grestore
+} def
+% /nstroke {stroke} def
+
+/draw_ring [/Spell] {
+    Spell begin
+        24 recip setlinewidth
+        set_nib_matrix
+        % borders based on rtype
+        rtype /dicttype eq {
+            components length circumference cvi maximum
+            dup { radius ring_halfwidth add 0 goto } circrepeat
+            closepath whitefill nstroke
+            dup { radius ring_halfwidth 0.75 mul add 0 goto } circrepeat
+            closepath nstroke
+            { radius ring_halfwidth sub 0 goto } circrepeat
+            closepath nstroke
+        } {
+            rtype /comment eq {
+                0 0 radius 0 90 sparc boltstroke
+                0 0 radius 0 -90 sparcn boltstroke
+            } {
+                0 0 radius ring_halfwidth add circle whitefill nstroke
+                0 0 radius ring_halfwidth sub circle nstroke
+            } ifelse
+        } ifelse
+        rtype /comment eq {
+            gsave
+                -90 rotate
+                comment_shrink_factor recip softscale
+                X_center
+                comment_text 0.75 radius comment_shrink_factor mul circular_balloon_show pop
+            grestore
+        } {
+            % draw each ring element
+            components { /Token arg
+                gsave
+                    Token /aflag get {
+                        Token draw_link
+                    } if
+                    Token /aflag get not Token /defligature known or {
+                        Token draw_sigil
+                    } if
+                grestore
+            } forall
+            % star for xarray
+            rtype /xarray eq {
+                /comp_n components length def
+                /star_radius radius ring_halfwidth sub def
+                comp_n 2 le {
+                    5 { star_radius half 0 goto } 2 schlafrepeat closepath nstroke
+                } {
+                    /full_step comp_n 2 mul 5 idiv def
+                    /star_rings comp_n full_step gcd def
+                    /star_points comp_n star_rings idiv def
+                    /star_step full_step star_rings idiv def
+                    0 1 star_rings 1 sub {
+                        gsave
+                            % dup star_rings div 360 mul setkatebowcolor
+                            360 comp_n div mul rotate
+                            star_points {star_radius 0 goto} star_step schlafrepeat 
+                            closepath nstroke
+                        grestore
+                    } for
+                } ifelse
+            } if
+        } ifelse
+        % debug ring positions
+        ring_debug {
+            gsave
+                1 0 0 setrgbcolor
+                0 0 radius circle stroke
+                0 1 0 setrgbcolor
+                0 0 full_radius circle stroke
+            grestore
+        } if
+    end
+} 0 false dict_safe_func
+
+% determine if a token should be drawn in a triangle
+/isname {
+    dup /otype get /nametype eq exch /xflag get not and
+} def
+
+% sigil_bank is in the other file
+
+/draw_sigil [/Token] {
+    Token begin
+    gsave
+        angle rotate
+        parent /radius get 0 translate
+        set_nib_matrix
+        Token isname {
+            gsave
+                3 {
+                    -1 0 goto
+                } circrepeat closepath nstroke
+            grestore
+        } if
+        sigil_bank name known otype /stringtype ne and {
+            gsave
+                otype /return ne {
+                    90 rotate
+                } if
+                otype /stringtype eq {
+                    % sigil cartouche
+                    0 0 ring_halfwidth spcircle nstroke
+                } if
+                otype /return ne {
+                    0.75 softscale
+                } if
+                sigil_bank name get exec
+                otype /return eq parent /root known and {
+                    0.5 0 goto 1 0 goto nstroke
+                } if
+            grestore
+        } {
+            90 rotate
+            gsave
+                /textrad parent /radius get def
+                0 textrad translate
+                otype /stringtype eq {
+                    name
+                } {
+                    name buffer cvs
+                } ifelse
+                textrad neg circle_center_show
+                otype /stringtype eq {
+                    /cartouche_outer_width width nonsigil_spacing sub def
+                    cartouche_outer_width cartouche_radius 2 mul ge {
+                        /cartouche_inner_width cartouche_outer_width cartouche_radius 2 mul sub def
+                        /text_angle cartouche_inner_width PI textrad mul div 180 mul half def
+                        /left_angle -90 text_angle sub def
+                        /right_angle -90 text_angle add def
+                        text_angle 90 gt {
+                            0 0 textrad cartouche_radius sub left_angle -90 sparc
+                            0 0 textrad cartouche_radius sub -90 right_angle sparc
+                        } {
+                            0 0 textrad cartouche_radius sub left_angle right_angle sparc
+                        } ifelse
+                        right_angle rotate
+                        textrad 0 cartouche_radius 180 0 sparcn
+                        right_angle neg rotate
+                        text_angle 90 gt {
+                            0 0 textrad cartouche_radius add right_angle -90 sparcn
+                            0 0 textrad cartouche_radius add -90 left_angle sparcn
+                        } {
+                            0 0 textrad cartouche_radius add right_angle left_angle sparcn
+                        } ifelse
+                        left_angle rotate
+                        textrad 0 cartouche_radius 0 180 sparcn
+                        left_angle neg rotate
+                        closepath
+                        nstroke
+                    } {
+                        % too small for cartouche, ellipse
+                        0 textrad neg cartouche_outer_width half cartouche_radius 0 180 spell 
+                        0 textrad neg cartouche_outer_width half cartouche_radius 180 0 spell
+                        nstroke
+                    } ifelse
+                } if
+            grestore
+        } ifelse
+        type_debug {
+            otype /return ne {
+                0 -0.75 translate
+                2 recip softscale
+                xflag {
+                    /Times-Bold 0.5 selectfont
+                } if
+                otype buffer cvs centershow
+            } if
+        } if
+    grestore
+    end
+} 0 false dict_safe_func
+/get_r0 {
+    % Token is defined
+    parent /radius get
+    Token /defligature known {
+        ring_halfwidth add
+    } if
+    ring /rtype get /comment eq {
+        ring_halfwidth 1.25 mul add
+    } if
+} def
+/draw_link [/Token] {
+    Token begin
+    gsave
+        /r4 parent /radius get Token /offset get add def
+        /r0 get_r0 def
+        /r3 r4 ring /radius get sub 
+            ring /rtype get /comment ne {
+                ring_halfwidth sub 
+            } if
+        def
+        /rstep r3 r0 sub 3 div def
+        /r1 r0 rstep add def
+        /r2 r1 rstep add def
+        angle rotate
+        /local_angle ring_angle angle sub def
+        set_nib_matrix
+        r0 0 polar goto
+        r1 0 polar
+        r2 local_angle polar
+        r3 local_angle polar curveto
+        ring /rtype get /comment eq {
+            reversepath boltstroke
+        } {
+            nstroke
+        } ifelse
+        ring /rtype get /comment ne {
+            r0 0 polar
+            ring /rtype get /xarray eq {
+                0.125 spcircle whitefill nstroke
+            } {
+                ndot
+            } ifelse
+        } if
+        local_angle rotate
+        r4 0 translate
+        180 rotate
+        ring draw_ring
+    grestore
+    % ring debug
+    ring_debug parent /wrapper known not and {
+        gsave
+            1 0.5 0 setrgbcolor
+            gsave
+                ring_angle rotate
+                0 0 goto
+                0 0 r4 
+                ring /full_radius get r4 div asin dup neg arcn
+                closepath stroke
+            grestore
+        grestore
+    } if
+    end
+} 0 false dict_safe_func
+
+% end of drawing functions
+
+/handlecode { /code arg /Ring arg
+    Ring code 0 parsecode pop
+    Ring 0 layoutring
+} def
+
+% modifies Ring in place to reflect the instructions starting at code[code_pos]
+/parsecode [/Ring /code /code_pos] {
+    10 dict begin
+        % Ring: Ring object to write into, type is set
+        % code:  input code
+        % code_pos: position in code being parsed
+
+        /i 0 def
+        /code_len code length def
+
+        Ring /cursor 0 put
+        Ring /components code_len 1 add code_pos sub array put
+        
+        code_len 0 gt {
+            {
+                /Token << >> def
+                /parent Ring def
+                /components Ring /components get def
+                /cursor Ring /cursor get def
+                components cursor Token put
+                % careful not to execute code piece before cvlit
+                code code_pos get
+                dup type cvlit /otype arg
+                dup xcheck /xflag arg
+                cvlit /literal arg
+                /aflag otype /arraytype eq def
+                otype /stringtype eq {
+                    /literal_s literal def
+                } {
+                    /literal_s literal buffer cvs def
+                } ifelse
+
+                /skip_token false def
+                % check for def-ligature
+                Ring /rtype get /xarray eq literal /def eq xflag and and {
+                    cursor 2 ge {
+                        % prev is true circle
+                        /previous components cursor 1 sub get def
+                        /candidate components cursor 2 sub get def
+                        previous /aflag get previous isname not and {
+                            candidate /aflag get not candidate isname and {
+                                % set up ligature - add ring info to name
+                                [/ring /aflag] { /field arg
+                                    candidate field
+                                    previous field get 
+                                    put
+                                } forall
+                                candidate /ring get /container candidate put
+                                candidate /defligature true put
+                                /cursor -2 adddef
+                                /skip_token true def
+                                /code_pos 1 adddef
+                            } if
+                        } if
+                    } if
+                } if
+                % check for comment
+                literal /mystical_comment_flag eq {
+                    % we are checking 1 back and 2 forward
+                    % expected syntax: (comment) /mystical_comment_flag pop pop
+                    cursor 1 ge code_pos 2 add code_len lt and {
+                        /comment_ok true def
+                        /candidate components cursor 1 sub get def
+                        candidate /otype get /stringtype ne {
+                            /comment_ok false def
+                        } if
+                        code code_pos 1 add get /pop ne {
+                            /comment_ok false def
+                        } if
+                        code code_pos 2 add get /pop ne {
+                            /comment_ok false def
+                        } if
+                        comment_ok {
+                            /comment_text candidate /name get def
+                            /comment_ring <<
+                                /aflag true
+                                /rtype /comment
+                                /components []
+                                /ring_components []
+                                /comment_text comment_text
+                                /container candidate
+                                /radius comment_text 0.75 find_circular_balloon_radius comment_shrink_factor div
+                            >> def
+                            comment_ring /circumference comment_ring /radius get 2 mul PI mul put
+                            candidate /aflag true put
+                            candidate /ring comment_ring put
+                            candidate /name (%) put
+                            candidate /width 0 put
+                            /skip_token true def
+                            /code_pos 3 adddef
+                            /cursor -1 adddef
+                        } if
+                    } if
+                } if
+                /cursor 1 adddef
+                Ring /cursor cursor put
+                skip_token not {
+                    % [ for vi
+                    % don't otherwise deal with these tokens
+                    literal_s (]) eq { exit } if
+                    literal_s (>>) eq { exit } if
+                    literal_s ([) eq literal_s (<<) eq or {
+                        % ] for vi
+                        /array_ring << /rtype literal_s (<<) eq {/dicttype} {/array} ifelse >> def
+                        Token /ring array_ring put
+                        array_ring /container Token put
+                        Token /signal true put
+                        /code_pos 1 adddef
+                        array_ring code code_pos parsecode /code_pos arg
+                        Token /name array_ring /rtype get put
+                        /aflag true def
+                    } {
+                        % Handle recursion for arrays
+                        otype /arraytype eq otype /dicttype eq or {
+                            /inner_ring <<
+                                /rtype xflag { 
+                                    /xarray 
+                                } { 
+                                    otype /arraytype eq {
+                                        /array 
+                                    } {
+                                        /dicttype
+                                    } ifelse
+                                } ifelse
+                            >> def
+                            otype /dicttype eq {
+                                /literal [literal {} forall] def
+                            } if
+                            Token /ring inner_ring put
+                            inner_ring /container Token put
+                            inner_ring literal 0 parsecode pop
+                            Token /name inner_ring /rtype get put
+                            /aflag true def
+                        } {
+                            Token /name literal put
+                        } ifelse
+                    } ifelse
+                    kerning {
+                        aflag {
+                            0.5
+                        } {
+                            sigil_bank literal known otype /stringtype ne and {
+                                std_sigil_width
+                            } {
+                                literal_s stringwidth pop
+                                nonsigil_spacing add
+                                otype /stringtype eq {
+                                    nonsigil_spacing add
+                                } if
+                            } ifelse
+                        } ifelse
+                        % even if text is short names must be sigil-width
+                        currentdict isname {
+                            std_sigil_width 1.25 mul max
+                        } if
+                    } {
+                        std_sigil_width
+                    } ifelse
+                    /width arg
+
+                    [/otype /xflag /aflag /width /parent] {
+                        Token exch dup cvx exec put
+                    } forall
+
+                    /code_pos 1 adddef
+                } if
+                code_pos code length ge { exit } if
+            } loop
+            % temporary shenanigans - cursor might be two off the end
+            components Ring /cursor get 1 sub get length 0 eq {
+                Ring /cursor -1 addput
+            } if
+        } if
+
+        % calculate positions for all tokens
+        /circumference 0.5 def
+        /cursor Ring /cursor get def
+        components 0 cursor getinterval { /component arg
+            % skip extraneous null at end
+            component type cvlit /dicttype eq {
+                /width component /width get def
+                component /position circumference width half add put
+                /circumference width adddef
+            } if
+        } forall
+        /components Ring /components get def
+
+        /end_token <<
+            /otype /return
+            /xflag false
+            /aflag false
+            /position circumference 0.5 add
+            /name Ring /rtype get /xarray eq { /RETURN } { /COMPLETE } ifelse
+            /parent Ring
+        >> def
+        components cursor end_token put
+        /cursor 1 adddef
+
+        % trim components to correct size
+        /components components 0 cursor getinterval def
+
+        % also make ring_components
+        /ring_component_count 0 def
+        components { /component arg
+            component /aflag get {
+                /ring_component_count 1 adddef
+            } if
+        } forall
+        /ring_components ring_component_count array def
+        /rci 0 def
+        components {
+            dup /aflag get {
+                ring_components exch rci exch put
+                /rci 1 adddef
+            } {
+                pop
+            } ifelse
+        } forall
+        rci ring_component_count ne {
+            [(rci ring_component_count mismatch) rci ring_component_count] == die
+        } if
+        % determine ring dimensions
+        /components components 0 cursor getinterval def
+        /circumference 0.5 adddef
+
+        % set angles of all sigils before messing with circumference
+        components { /component arg
+            /angle component /position get circumference div 360 mul def
+            component /angle angle put
+            component /position undef
+        } forall
+
+        /circumference circumference 2 PI mul maximum def
+        /radius circumference PI div half def
+
+        Ring /circumference circumference put
+        Ring /radius radius put
+        Ring /components components put
+        Ring /ring_components ring_components put
+        code_pos
+    end
+} 1 false dict_safe_func
+
+/set_offset { /inner_ring arg /source arg
+    inner_ring /wrapped known not {
+        source /offset
+        inner_ring /full_radius get ring_spacing add put
+    } if
+} def
+
+/layoutring [/Ring /depth] {
+        /components Ring /components get def
+        /ring_components Ring /ring_components get def
+        /radius Ring /radius get def
+        % detect wrapper if enabled
+        % since all other wrapper handling is based on presence of /wrapper,
+        % gating setting wrapper on the flag is sufficient
+        depth 0 eq compact_wrapper and {
+            /children 0 def
+            components {
+                /ring known { /children 1 adddef } if
+            } forall
+            children 1 eq {
+                Ring /wrapper true put
+            } if
+        } if
+        components {
+            /Token arg
+            Token /ring known {
+                /inner_ring Token /ring get def
+                Ring /wrapper known {
+                    inner_ring /wrapped true put
+                } if
+                inner_ring depth 1 add layoutring
+                Token inner_ring set_offset
+            } if
+        } forall
+
+        % layout
+
+        % find largest dependent ring
+        % also find how much bigger an envelope must be
+        % defaulting to ring thickess for rings
+        % and to 0 for comments
+        /max_sub 
+            Ring /rtype get /comment eq {
+                0
+            } {
+                ring_halfwidth 
+            } ifelse
+        def
+        % ordered list of components and their span info
+        /ring_spans ring_components length array def
+        /rci 0 def
+        ring_components { /component arg
+            /angle component /angle get def
+            component /ring_angle known not {
+                component /ring_angle angle put
+            } if
+            /c_ring component /ring get def
+            /sub_offset
+                c_ring /full_radius get component /offset get add 
+                def
+            sub_offset max_sub gt {
+                /max_sub sub_offset def
+            } if
+            % for figuring out angle positions we need:
+            % angle
+            % center_offset (ring radius plus offset)
+            % angle span (radius in either direction)
+            % none of this is needed if wrapper
+            Ring /wrapper known not {
+                /center_offset radius component /offset get add def
+                /angle_span c_ring /full_radius get sibling_hs add center_offset div asin def
+                /ring_span <<
+                    /ring c_ring
+                    /full_radius c_ring /full_radius get
+                    /ring_angle angle
+                    /center_offset center_offset
+                    /angle_span angle_span
+                >> def
+                ring_spans rci [component ring_span] put
+                /rci 1 adddef
+            } if
+        } forall
+
+        Ring /wrapper known not {
+            % if wrapped:
+            % find angle span for parent (ps)
+            % range goes from ps to 360 - ps instead of 0 to 360
+            % constrain wrapped to leave room for parent
+            Ring /wrapped known {
+                /container Ring /container get def
+                /parent_ring container /parent get def
+                % center offset for wrapped-to-wrapper
+                /parent_center_offset radius
+                    ring_halfwidth add
+                    ring_spacing add 
+                    parent_ring /radius get add 
+                    def
+                /parent_span parent_ring /radius get
+                    ring_halfwidth add sibling_hs add
+                    parent_center_offset div asin def
+            } if
+
+            /ring_spans ring_spans 0 rci getinterval def
+            ring_spans length 1 gt {
+                % check for everyone having room
+                /total_spans 0 def
+                ring_spans { aload pop /ring_span arg /component arg
+                    ring_span /angle_span get 2 mul total_spans add
+                    /total_spans arg
+                } forall
+                Ring /wrapped known {
+                    /total_spans parent_span 2 mul adddef
+                } if
+                Ring /total_spans total_spans put
+                total_spans 360 gt {
+                    % not enough room, push everyone out and space evenly
+                    /adjustment 360 total_spans div def
+                    /angle_tracker 0 def
+                    ring_spans { aload pop /ring_span arg /component arg
+                        /full_radius ring_span /full_radius get def
+                        /new_span ring_span /angle_span get adjustment mul def
+                        /increase
+                            full_radius sibling_hs add
+                            new_span sin div
+                            ring_span /center_offset get sub
+                        def
+                        /c_ring component /ring get def
+                        /new_offset component /offset get increase add def
+                        component /offset new_offset put
+                        /angle_span full_radius sibling_hs add new_offset radius add div asin def
+                        component /ring_angle angle_tracker angle_span add put
+                        /angle_tracker angle_span 2 mul adddef
+
+                        /sub_offset
+                            c_ring /full_radius get component /offset get add 
+                            def
+                        sub_offset max_sub gt {
+                            /max_sub sub_offset def
+                        } if
+                    } forall
+                } {
+                    % check for jostling
+                    % create endpoints
+                    /start_angle 0 def
+                    /end_angle 360 def
+                    Ring /wrapped known {
+                        /start_angle parent_span def
+                        /end_angle 360 parent_span sub def
+                    } if
+                    % create differential list
+                    /diff_list ring_spans length 1 add array def
+                    /last_span ring_spans length 1 sub def
+                    /last_diff ring_spans length def
+                    % first entry diffs from start_angle
+                    diff_list 0 
+                        ring_spans 0 get 1 get
+                        dup /ring_angle get exch /angle_span get sub
+                        start_angle sub
+                    put
+                    % middle entries diff from previous neighbor
+                    1 1 last_span { /i arg
+                        diff_list i
+                        /span_a ring_spans i 1 sub get 1 get def
+                        /span_b ring_spans i get 1 get def
+                        span_b dup /ring_angle get exch /angle_span get sub
+                        span_a dup /ring_angle get exch /angle_span get add sub 
+                        put
+                    } for
+                    % last entry diff from end_angle
+                    diff_list last_diff ring_spans last_span get 1 get
+                        dup /ring_angle get exch /angle_span get add
+                        end_angle exch sub
+                    put
+
+                    % calculate optimal diff_list
+                    % move negative edges to first positive neighbor
+                    0 1 last_diff { /i arg
+                        {
+                            diff_list i get start_angle ge { exit } if
+                            /left i 1 sub def
+                            {
+                                left 0 lt {exit} if
+                                diff_list left get 0 gt { exit } if
+                                /left -1 adddef
+                            } loop
+                            /right i 1 add def
+                            {
+                                right last_diff gt {exit} if
+                                diff_list right get 0 gt { exit } if
+                                /right 1 adddef
+                            } loop
+                            left 0 ge {
+                                right last_diff le {
+                                    % both sides available
+                                    /remove_amount 
+                                        diff_list left get
+                                        diff_list right get minimum
+                                        diff_list i get half minimum
+                                    def
+                                    diff_list left remove_amount addput
+                                    diff_list right remove_amount addput
+                                    diff_list i remove_amount -2 mul addput
+                                } {
+                                    % only left is available
+                                    /remove_amount diff_list left get diff_list i get minimum def
+                                    diff_list left remove_amount addput
+                                    diff_list i remove_amount neg addput
+                                } ifelse
+                            } {
+                                % left is off side
+                                right last_diff le {
+                                    % only right is available
+                                    /remove_amount diff_list right get diff_list i get minimum def
+                                    diff_list right remove_amount addput
+                                    diff_list i remove_amount neg addput
+                                } {
+                                    [(both sides off)] == die
+                                } ifelse
+                            } ifelse
+                            exit
+                        } loop
+                    } for
+
+                    % spread negative centers to positive neighbors
+                    % update ring_angles to match diff_list
+                    /ring_cursor start_angle def
+                    0 1 last_span { /i arg
+                        /current_span ring_spans i get def
+                        /ring_cursor diff_list i get adddef
+                        /ring_cursor current_span 1 get /angle_span get adddef
+                        current_span 0 get /ring_angle ring_cursor put
+                        /ring_cursor current_span 1 get /angle_span get adddef
+                    } for
+
+                } ifelse
+            } if
+        } if
+
+        /full_radius radius max_sub add def
+        Ring /wrapped known {
+            container /ring_angle container /angle get put
+            % pass parent_center_offset out
+            container /offset 
+                parent_center_offset parent_ring /radius get sub
+            put
+            % also set this ring's ring_angle:
+            % * make sure ring itself doesn't run into return line
+            % * also check that subrings don't run into return line
+            /container_angle container /ring_angle get def
+            /central_span
+                radius sibling_spacing add
+                parent_center_offset div
+                asin def
+            container_angle central_span sub 0 lt {
+                container /ring_angle central_span put
+            } if
+            container_angle central_span add 360 gt {
+                container /ring_angle 360 central_span sub put
+            } if
+            ring_components { /subring arg
+                /container_angle container /ring_angle get def
+                % distance to center of subring using law of cosines
+                % wrapper -a- wrapped -b- subring -c- wrapper
+                /a parent_center_offset def
+                /b subring /offset get radius add def
+                /gamma subring /ring_angle get def
+                /c
+                    a dup mul
+                    b dup mul add
+                    2 a mul b mul gamma cos mul sub
+                sqrt def
+                % angle to center with law of sins
+                /subring_angle gamma sin c div b mul asin def
+                % we want how subring_angle goes forward or back from wrapped
+                % negative if gamma is less than 180
+                % otherwise we want to negate and mymod it
+                gamma 180 lt {
+                    /subring_angle subring_angle neg def
+                } {
+                    /subring_angle subring_angle neg 360 mymod def
+                } ifelse
+
+                /subring_span subring /ring get /full_radius get sibling_hs add c div asin def
+                /overlap container_angle subring_angle add subring_span sub def
+                overlap 0 lt {
+                    /new_angle container_angle overlap sub def
+                    container /ring_angle get new_angle lt {
+                        container /ring_angle new_angle put
+                    } if
+                } if
+                /poke container_angle subring_angle add subring_span add def
+                /overlap poke 360 sub def
+                overlap 0 gt {
+                    /new_angle container_angle overlap sub def
+                    container /ring_angle get new_angle gt {
+                        container /ring_angle new_angle put
+                    } if
+                } if
+            } forall
+        } if
+
+        Ring /components components put
+        Ring /radius radius put
+        Ring /full_radius full_radius put
+} 0 /new dict_safe_func
+
+end     % now out of mystical_dict
+
+/mystical_get_spell {
+    mystical_dict begin
+    10 dict begin
+        /input_code arg
+        % determine type
+        /xflag false def
+        /input_code load xcheck {
+            /xflag true def
+            currentdict /input_code get cvlit /input_code arg
+        } if
+        /rtype xflag { /xarray} {input_code type cvlit } ifelse def
+        rtype /dicttype eq {
+            % convert dict into array of k, v, k, v, ...
+            /input_code [ input_code {} forall ] def
+        } if
+        % parse into Ring object
+        /Spell << /rtype rtype /root true >> def
+        Spell input_code handlecode
+        Spell
+    end
+    end
+} def
+
+/mystical_scale_spell { /Spell arg
+    Spell /full_radius get recip dup scale
+} def
+
+/mystical_draw_spell {
+    mystical_dict begin
+        /Spell arg
+        gsave
+            Spell mystical_scale_spell
+            Spell draw_ring
+        grestore
+    end
+} def
+
+/mystical {
+    10 dict begin
+        mystical_get_spell /Spell arg
+        Spell mystical_draw_spell
+    end
+} def
+
+/mystical_unscaled {
+    mystical_dict begin
+    10 dict begin
+        mystical_get_spell /Spell arg
+        Spell draw_ring
+    end
+    end
+} def
+
+/mystical_evoke { /evocation arg
+    evocation load mystical
+} def
+
+/mystical_evoke_unscaled { /evocation arg
+    evocation load mystical_unscaled
+} def
+
+/mystical_make_evocation_ligature { /Spell arg /evocation arg
+    % false token for label
+    <<
+        /name evocation /otype /nametype 
+        /xflag false /aflag true
+        /position 0 /angle -90 /parent <<
+            /radius Spell /full_radius get neg
+        >>
+        /ring Spell /ring_angle -90 /offset Spell /full_radius get
+        /defligature true
+    >> 
+} def
+/mystical_draw_evocation_label { /Spell arg /evocation arg
+    /ligature evocation Spell mystical_make_evocation_ligature def
+    mystical_dict begin
+        ligature draw_sigil
+        ligature draw_link
+    end
+} def
+
+/mystical_evoke_label_base { /do_scale arg /evocation arg
+    evocation load mystical_get_spell /Spell arg
+    gsave
+        do_scale { Spell mystical_scale_spell } if
+        evocation Spell mystical_draw_evocation_label
+    grestore
+} def
+
+/mystical_evoke_label { true mystical_evoke_label_base } def
+/mystical_evoke_label_unscaled { false mystical_evoke_label_base } def
+%!
+72 dup scale
+4.25 5.5 translate
+4 dup scale
+
+{ 
+
+(1. Кладем переменные A и B) /mystical_comment_flag pop pop
+true  (A) /mystical_comment_flag pop pop
+true  (B) /mystical_comment_flag pop pop
+
+(2. Операция AND (получим true)) /mystical_comment_flag pop pop
+and
+
+(3. Кладем переменную C) /mystical_comment_flag pop pop
+false (C) /mystical_comment_flag pop pop
+
+(4. Операция OR (результат с C)) /mystical_comment_flag pop pop
+or} mystical
+
+showpage
+

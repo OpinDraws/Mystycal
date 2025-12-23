@@ -1,0 +1,55 @@
+%!
+(mystical.ps) run
+72 dup scale
+4.25 5.5 translate
+5 dup scale
+
+{ 
+
+true (Sun Essence) /mystical_comment_flag pop pop
+false (Moon Essence) /mystical_comment_flag pop pop
+
+(Делаем копии для ритуала, сохраняя оригиналы в глубине стека) /mystical_comment_flag pop pop
+2 copy 
+
+(--- СЛОЙ 1: СЛИЯНИЕ (The Flux) ---\nИспользуем словарь << >>, чтобы создать визуальное кольцо вокруг операции.) /mystical_comment_flag pop pop
+<<
+    (A xor B) /mystical_comment_flag pop pop
+    xor 
+    (Chaos Flux) /mystical_comment_flag pop pop
+    
+    (Добавляем "соль" — мусорное значение для красоты узора, которое сразу удаляем) /mystical_comment_flag pop pop
+    1337 (Salt) /mystical_comment_flag pop 
+>>
+
+(Извлекаем результат из словаря (в Mystical словари кладут себя на стек,\nно для чистоты алгоритма мы предполагаем, что результат вычисления остался доступен\nили мы просто продолжаем работать со стеком).\nПримечание: Если транслятор строгий, << >> может не возвращать значение на стек напрямую,\nно визуально это создаст "Замкнутый круг".) /mystical_comment_flag pop pop
+
+(--- СЛОЙ 2: ПЕРВАЯ ТРАНСМУТАЦИЯ ---\nТеперь у нас на стеке: (Flux)\nНам нужно достать (Moon) из глубины.\nИспользуем массив [ ] для создания квадратной печати.) /mystical_comment_flag pop pop
+
+[
+    (Манипуляция стеком: (Sun) (Moon) (Flux) -> (Sun) (Flux) (Flux) (Moon)\nУпростим для визуализации: предполагаем, что работаем с верхними значениями.) /mystical_comment_flag pop pop
+    
+    exch dup 
+    (Mirror) /mystical_comment_flag pop pop
+    
+    xor
+    (New Sun) /mystical_comment_flag pop pop
+]
+
+(Мы выходим из массива. Теперь у нас восстановлен первый элемент.) /mystical_comment_flag pop pop
+
+(--- СЛОЙ 3: ФИНАЛЬНАЯ ПЕЧАТЬ ---\nЗавершаем обмен. (Flux) xor (New Sun) -> (New Moon)) /mystical_comment_flag pop pop
+
+<<
+    xor
+    (New Moon) /mystical_comment_flag pop pop
+    
+    true (Seal of Binding) /mystical_comment_flag pop pop
+    and (Логическое завершение, "склеиваем" печать) /mystical_comment_flag pop pop
+>>
+
+(В итоге на стеке лежат обмененные значения, окруженные визуальными слоями) /mystical_comment_flag pop pop
+} mystical
+
+showpage
+
